@@ -34,7 +34,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Secret key for JWT signing
-const secretKey = 'your_secret_key'; // Change this to a secure key
+const secretKey = '234455'; // Change this to a secure key
 
 // Register a new user
 app.post('/register', async (req, res) => {
