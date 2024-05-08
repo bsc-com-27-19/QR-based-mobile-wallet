@@ -82,4 +82,3 @@ async function createAndCaptureOrder(purchaseUnits, card, clientId, clientSecret
 module.exports = {
     createAndCaptureOrder: createAndCaptureOrder
   };
-
