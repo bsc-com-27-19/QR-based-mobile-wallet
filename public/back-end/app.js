@@ -211,20 +211,20 @@ app.get('/users', async (req, res) => {
 // Create an Express route to handle incoming requests for different users
 app.post('/create-order', async (req, res) => {
   try {
-      // Get the purchase_units data, card details, client ID, and client secret from the request body
       const { purchase_units, card, clientId, clientSecret } = req.body;
 
       // Call the function to create and capture an order for the specific user
-      await createAndCaptureOrder(purchase_units, card, clientId, clientSecret);
+      const captureResponse = await createAndCaptureOrder(purchase_units, card, clientId, clientSecret);
 
       // Send a success response to the client
-      res.status(200).send({ message: 'Order created and payment captured successfully.' });
+      res.status(200).json({ message: 'Order created and payment captured successfully', data: captureResponse });
   } catch (error) {
-      console.error('Error:', error.response ? error.response.data : error.message);
+      console.error('Error:', error);
       // Send an error response to the client
-      res.status(500).send({ error: 'Internal server error' });
+      res.status(400).json({ error: error.message });
   }
 });
+
 
 // Run the migration script to create tables if they don't exist
 createTables().then(() => {

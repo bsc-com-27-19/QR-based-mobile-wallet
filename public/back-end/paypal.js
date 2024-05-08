@@ -35,13 +35,10 @@ async function getAccessToken(clientId, clientSecret) {
 // Create and capture an order with a credit card for a specific user
 async function createAndCaptureOrder(purchaseUnits, card, clientId, clientSecret) {
     try {
-        // Get access token for the specific user
         const accessToken = await getAccessToken(clientId, clientSecret);
-
-        // Generate a unique PayPal-Request-Id
         const payPalRequestId = uuidv4();
 
-        // Create an order with the provided purchase_units and credit card details
+        // Create an order
         const createOrderResponse = await axios.post(`${BASE_URL}/v2/checkout/orders`, {
             intent: 'CAPTURE',
             purchase_units: purchaseUnits,
@@ -61,8 +58,13 @@ async function createAndCaptureOrder(purchaseUnits, card, clientId, clientSecret
             }
         });
 
-        // Capture the payment
+        if (!createOrderResponse.data.id) {
+            throw new Error('Failed to create order');
+        }
+
         const orderId = createOrderResponse.data.id;
+
+        // Capture the payment
         const captureResponse = await axios.post(`${BASE_URL}/v2/checkout/orders/${orderId}/capture`, {}, {
             headers: {
                 'Authorization': `Bearer ${accessToken}`,
@@ -71,12 +73,16 @@ async function createAndCaptureOrder(purchaseUnits, card, clientId, clientSecret
             }
         });
 
-        console.log('Capture Response:', captureResponse.data);
+        if (captureResponse.data.status !== 'COMPLETED') {
+            throw new Error('Failed to capture payment');
+        }
+
+        return captureResponse.data;
     } catch (error) {
         console.error('Error:', error.response ? error.response.data : error.message);
+        throw new Error('Error creating or capturing order: ' + error.message);
     }
 }
-
 
 
 module.exports = {
