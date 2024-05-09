@@ -41,49 +41,47 @@ app.use(express.urlencoded({ extended: true }));
 // Middleware for file uploads
 app.use(fileUpload());
 
+//register a user with associated client id and secret key
 app.post('/register', async (req, res) => {
   try {
-    const { username, password, confirm } = req.body;
+      const { username, password, confirm, client_id, secret_key, card } = req.body;
 
-    // Validate if password and confirm password match
-    if (password !== confirm) {
-      res.status(400).send('Passwords do not match');
-      return;
-    }
+      // Perform validations (e.g., password match, email format)
+      if (password !== confirm) {
+          return res.status(400).send('Passwords do not match');
+      }
 
-    // Validate if username is in email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(username)) {
-      res.status(400).send('Invalid email address');
-      return;
-    }
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(username)) {
+          return res.status(400).send('Invalid email address');
+      }
 
-    // Hash the password using the hashPassword function from utils.js
-    const hashedPassword = await hashPassword(password);
+      // Hash the password
+      const hashedPassword = await hashPassword(password);
 
-    // Generate QR code
-    const qrCodeData = `User: ${username}`; // Customize QR code data as per your requirement
-    const qrCodeImage = await qr.toDataURL(qrCodeData);
+      // Check if card details are provided
+      if (!card || !card.name || !card.number || !card.security_code || !card.expiry) {
+          return res.status(400).send('Incomplete card details');
+      }
 
-    // Access the uploaded file
-    const profilePicture = req.files && req.files.profilePicture ? req.files.profilePicture.data : null;
+      // Store user data including PayPal credentials and card details in the database
+      const result = await pool.query(
+          `INSERT INTO users (username, password, client_id, secret_key, card_name, card_number, card_security_code, card_expiry)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+          [username, hashedPassword, client_id, secret_key, card.name, card.number, card.security_code, card.expiry]
+      );
 
-    // Store the user in the database
-    const result = await pool.query('INSERT INTO users (username, password, profile_picture, qrcode) VALUES ($1, $2, $3, $4) RETURNING id', [username, hashedPassword, profilePicture, qrCodeImage]);
-    const userId = result.rows[0].id;
+      const userId = result.rows[0].id;
 
-    // Store user ID in the session
-    req.session.userId = userId;
+      // Store user ID in the session
+      req.session.userId = userId;
 
-    res.status(201).send('User registered successfully');
+      res.status(201).send('User registered successfully');
   } catch (error) {
-    console.error(error);
-    res.status(500).send('Internal Server Error');
+      console.error(error);
+      res.status(500).send('Internal Server Error');
   }
 });
-
-
-
 
 // JWT verify token section
 
@@ -106,36 +104,39 @@ function verifyToken(req, res, next) {
   }
 }
 
-
-// Login route
+//Login endpoint
 app.post('/login', async (req, res) => {
   try {
-    const { username, password } = req.body;
+      const { username, password } = req.body;
 
-    // Retrieve user from the database
-    const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    const user = result.rows[0];
+      // Retrieve user from the database
+      const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+      const user = result.rows[0];
 
-    if (!user) {
-      return res.status(401).send('Incorrect username or password');
-    }
+      if (!user) {
+          return res.status(401).send('Incorrect username or password');
+      }
 
-    // Compare hashed password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+      // Compare hashed password
+      const isPasswordValid = await bcrypt.compare(password, user.password);
 
-    if (!isPasswordValid) {
-      return res.status(401).send('Incorrect username or password');
-    }
+      if (!isPasswordValid) {
+          return res.status(401).send('Incorrect username or password');
+      }
 
-    // Store user ID in the session
-    req.session.userId = user.id;
+      // Store user ID in the session
+      req.session.userId = user.id;
 
-    res.json({ message: 'Login successful' });
+      // Update the user's session ID in the database
+      await pool.query('UPDATE users SET session_id = $1 WHERE id = $2', [req.sessionID, user.id]);
+
+      res.json({ message: 'Login successful' });
   } catch (error) {
-    console.error(error);
-    res.status(500).send('Internal Server Error');
+      console.error(error);
+      res.status(500).send('Internal Server Error');
   }
 });
+
 
 // Protected route
 app.get('/protected', verifyToken, async (req, res) => {
@@ -165,28 +166,6 @@ app.get('/qrcode', (req, res) => {
   }
 });
 
-// User details route
-app.get('/user/details', async (req, res) => {
-  try {
-    // Check if user is logged in
-    if (!req.session.userId) {
-      return res.status(401).send('Unauthorized');
-    }
-
-    // Query the database to get user details based on the user ID
-    const queryResult = await pool.query('SELECT username FROM users WHERE id = $1', [req.session.userId]);
-
-    if (queryResult.rows.length === 1) {
-      const userDetails = queryResult.rows[0];
-      res.json(userDetails);
-    } else {
-      res.status(404).json({ error: 'User not found' });
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Internal Server Error' });
-  }
-});
 
 // Get all registered users
 app.get('/users', async (req, res) => {
@@ -211,20 +190,45 @@ app.get('/users', async (req, res) => {
 // Create an Express route to handle incoming requests for different users
 app.post('/create-order', async (req, res) => {
   try {
-      const { purchase_units, card, clientId, clientSecret } = req.body;
+      const userId = req.session.userId;
 
-      // Call the function to create and capture an order for the specific user
-      const captureResponse = await createAndCaptureOrder(purchase_units, card, clientId, clientSecret);
+      if (!userId) {
+          return res.status(401).json({ error: 'User not logged in' });
+      }
+
+      // Retrieve user data from the database, including stored card details
+      const userResult = await pool.query(`SELECT client_id, secret_key, card_name, card_number, card_security_code, card_expiry FROM users WHERE id = $1`, [userId]);
+      const user = userResult.rows[0];
+
+      if (!user) {
+          return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Get the purchase units from the request body
+      const { purchase_units } = req.body;
+
+      // Use the stored card details from the user's data
+      const card = {
+          name: user.card_name,
+          number: user.card_number,
+          security_code: user.card_security_code,
+          expiry: user.card_expiry,
+      };
+
+      // Retrieve PayPal client ID and secret key from the user's data
+      const clientId = user.client_id;
+      const secretKey = user.secret_key;
+
+      // Call the function to create and capture an order
+      const captureResponse = await createAndCaptureOrder(purchase_units, card, clientId, secretKey);
 
       // Send a success response to the client
       res.status(200).json({ message: 'Order created and payment captured successfully', data: captureResponse });
   } catch (error) {
       console.error('Error:', error);
-      // Send an error response to the client
-      res.status(400).json({ error: error.message });
+      res.status(500).json({ error: error.message });
   }
 });
-
 
 // Run the migration script to create tables if they don't exist
 createTables().then(() => {

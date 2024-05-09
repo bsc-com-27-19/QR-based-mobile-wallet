@@ -1,26 +1,29 @@
 const db = require('./db'); // Assuming this file sets up the database connection
-const pgp = require('pg-promise')();
 
 // Define the createTables function
 async function createTables() {
-  try {
-    // Create tables if they don't exist
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255) UNIQUE NOT NULL,
-        password TEXT NOT NULL,
-        profile_picture BYTEA,
-        qrcode BYTEA
+    try {
+        // Create tables if they don't exist
+        await db.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          username VARCHAR(255) UNIQUE NOT NULL, -- User's email
+          password TEXT NOT NULL, -- Hashed password
+          client_id VARCHAR(255) NOT NULL, -- PayPal client ID
+          secret_key TEXT NOT NULL, -- PayPal secret key
+          card_name VARCHAR(255), -- Name on the card
+          card_number VARCHAR(19), -- Card number (PAN)
+          card_security_code VARCHAR(4), -- Card security code (CVV or CVC)
+          card_expiry VARCHAR(7), -- Card expiration date in format YYYY-MM
+          session_id VARCHAR(255) -- Session ID to track user sessions
       );
-    `);
-
-    console.log('Tables created successfully.');
-  } catch (error) {
-    console.error('Error creating tables:', error);
-  } finally {
-    pgp.end();
-  }
+      
+        `);
+        
+        console.log('Tables created successfully.');
+    } catch (error) {
+        console.error('Error creating tables:', error);
+    }
 }
 
 // Export the createTables function
