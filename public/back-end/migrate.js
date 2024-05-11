@@ -7,6 +7,7 @@ async function createTables() {
         await db.query(`
         CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
+          email VARCHAR(255) UNIQUE NOT NULL, -- User's email
           username VARCHAR(255) UNIQUE NOT NULL, -- User's email
           password TEXT NOT NULL, -- Hashed password
           client_id VARCHAR(255) NOT NULL, -- PayPal client ID

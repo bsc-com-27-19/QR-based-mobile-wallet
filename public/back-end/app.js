@@ -44,7 +44,7 @@ app.use(fileUpload());
 //register a user with associated client id and secret key
 app.post('/register', async (req, res) => {
   try {
-      const { username, password, confirm, client_id, secret_key, card } = req.body;
+      const { email, username, password, confirm, client_id, secret_key, card } = req.body;
 
       // Perform validations (e.g., password match, email format)
       if (password !== confirm) {
@@ -66,9 +66,9 @@ app.post('/register', async (req, res) => {
 
       // Store user data including PayPal credentials and card details in the database
       const result = await pool.query(
-          `INSERT INTO users (username, password, client_id, secret_key, card_name, card_number, card_security_code, card_expiry)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-          [username, hashedPassword, client_id, secret_key, card.name, card.number, card.security_code, card.expiry]
+          `INSERT INTO users (email, username, password, client_id, secret_key, card_name, card_number, card_security_code, card_expiry)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+          [email, username, hashedPassword, client_id, secret_key, card.name, card.number, card.security_code, card.expiry]
       );
 
       const userId = result.rows[0].id;
