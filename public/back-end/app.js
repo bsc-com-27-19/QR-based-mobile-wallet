@@ -204,7 +204,7 @@ app.get('/users', async (req, res) => {
 });
 
 // Create an Express route to handle incoming requests for different users
-app.post('/create-order', async (req, res) => {
+app.post('/create-order1', async (req, res) => {
   try {
       const userId = req.session.userId;
 
@@ -245,6 +245,29 @@ app.post('/create-order', async (req, res) => {
       res.status(500).json({ error: error.message });
   }
 });
+
+// Create an Express route to handle incoming requests for creating an order
+app.post('/create-order', async (req, res) => {
+  try {
+      // Retrieve data from the request body sent by the frontend
+      const { purchase_units, card, clientId, secretKey } = req.body;
+
+      // Check if all required data is present
+      if (!purchase_units || !card || !clientId || !secretKey) {
+          return res.status(400).json({ error: 'Missing required data in request body' });
+      }
+
+      // Call the function to create and capture an order
+      const captureResponse = await createAndCaptureOrder(purchase_units, card, clientId, secretKey);
+
+      // Send a success response to the client
+      res.status(200).json({ message: 'Order created and payment captured successfully', data: captureResponse });
+  } catch (error) {
+      console.error('Error:', error);
+      res.status(500).json({ error: error.message });
+  }
+});
+
 
 // Run the migration script to create tables if they don't exist
 createTables().then(() => {
