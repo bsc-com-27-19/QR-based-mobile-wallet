@@ -130,13 +130,29 @@ app.post('/login', async (req, res) => {
       // Update the user's session ID in the database
       await pool.query('UPDATE users SET session_id = $1 WHERE id = $2', [req.sessionID, user.id]);
 
-      res.json({ message: 'Login successful' });
+      // Send user details along with the login response
+      res.json({
+        message: 'Login successful',
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          clientId: user.client_id,
+          secretKey: user.secret_key,
+          card: {
+            name: user.card_name,
+            number: user.card_number,
+            securityCode: user.card_security_code,
+            expiry: user.card_expiry
+          }
+        },
+        sessionId: req.sessionID,
+      });
   } catch (error) {
       console.error(error);
       res.status(500).send('Internal Server Error');
   }
 });
-
 
 // Protected route
 app.get('/protected', verifyToken, async (req, res) => {
