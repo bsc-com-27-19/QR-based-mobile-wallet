@@ -14,7 +14,7 @@ const bodyParser = require('body-parser');
 const cors=require("cors")
 const qr = require('qrcode'); // Import the QR code generation library
 const { encode } = require('base64-arraybuffer'); // Import the base64-arraybuffer library
-const { createAndCaptureOrder } = require('./paypal');
+const { createAndCaptureOrder, getAccessToken, getPayPalBalance, updatePayeeBalance } = require('./paypal'); // Import the new functions
 
 // Use CORS middleware
 app.use(cors());
@@ -144,7 +144,8 @@ app.post('/login', async (req, res) => {
             number: user.card_number,
             securityCode: user.card_security_code,
             expiry: user.card_expiry
-          }
+          },
+          balance: user.balance
         },
         sessionId: req.sessionID,
       });
@@ -203,8 +204,7 @@ app.get('/users', async (req, res) => {
   }
 });
 
-// Create an Express route to handle incoming requests for different users
-app.post('/create-order1', async (req, res) => {
+app.post('/order', async (req, res) => {
   try {
       const userId = req.session.userId;
 
@@ -212,16 +212,22 @@ app.post('/create-order1', async (req, res) => {
           return res.status(401).json({ error: 'User not logged in' });
       }
 
-      // Retrieve user data from the database, including stored card details
-      const userResult = await pool.query(`SELECT client_id, secret_key, card_name, card_number, card_security_code, card_expiry FROM users WHERE id = $1`, [userId]);
+      // Retrieve user data from the database, including stored card details and balance
+      const userResult = await pool.query(`SELECT client_id, secret_key, card_name, card_number, card_security_code, card_expiry, balance FROM users WHERE id = $1`, [userId]);
       const user = userResult.rows[0];
 
       if (!user) {
           return res.status(404).json({ error: 'User not found' });
       }
 
-      // Get the purchase units from the request body
+      // Get the purchase units and the total amount from the request body
       const { purchase_units } = req.body;
+      const totalAmount = purchase_units.reduce((acc, unit) => acc + parseFloat(unit.amount.value), 0);
+
+      // Check if the user's balance is sufficient
+      if (user.balance < totalAmount) {
+          return res.status(400).json({ error: 'Insufficient balance' });
+      }
 
       // Use the stored card details from the user's data
       const card = {
@@ -238,35 +244,78 @@ app.post('/create-order1', async (req, res) => {
       // Call the function to create and capture an order
       const captureResponse = await createAndCaptureOrder(purchase_units, card, clientId, secretKey);
 
+      // Deduct the amount from the user's balance
+      const newBalance = user.balance - totalAmount;
+      await pool.query('UPDATE users SET balance = $1 WHERE id = $2', [newBalance, userId]);
+
       // Send a success response to the client
-      res.status(200).json({ message: 'Order created and payment captured successfully', data: captureResponse });
+      res.status(200).json({ message: 'Order created and payment captured successfully', data: captureResponse, balance: newBalance });
   } catch (error) {
       console.error('Error:', error);
       res.status(500).json({ error: error.message });
   }
 });
 
-// Create an Express route to handle incoming requests for creating an order
+//Create-order endpoint
 app.post('/create-order', async (req, res) => {
   try {
-      // Retrieve data from the request body sent by the frontend
       const { purchase_units, card, clientId, secretKey } = req.body;
 
-      // Check if all required data is present
       if (!purchase_units || !card || !clientId || !secretKey) {
           return res.status(400).json({ error: 'Missing required data in request body' });
       }
 
-      // Call the function to create and capture an order
+      const userResult = await pool.query('SELECT id, balance FROM users WHERE client_id = $1 AND secret_key = $2', [clientId, secretKey]);
+      const user = userResult.rows[0];
+
+      if (!user) {
+          return res.status(404).json({ error: 'User not found' });
+      }
+
+      const totalAmount = purchase_units.reduce((acc, unit) => acc + parseFloat(unit.amount.value), 0);
+
+      if (user.balance < totalAmount) {
+          return res.status(400).json({ error: 'Insufficient balance' });
+      }
+
       const captureResponse = await createAndCaptureOrder(purchase_units, card, clientId, secretKey);
 
-      // Send a success response to the client
-      res.status(200).json({ message: 'Order created and payment captured successfully', data: captureResponse });
+      const newBalance = user.balance - totalAmount;
+      await pool.query('UPDATE users SET balance = $1 WHERE id = $2', [newBalance, user.id]);
+
+      const payeeEmail = purchase_units[0].payee.email_address;
+      const newPayeeBalance = await updatePayeeBalance(payeeEmail, totalAmount);
+
+      res.status(200).json({ message: 'Order created and payment captured successfully', data: captureResponse, balance: newBalance, payeeBalance: newPayeeBalance });
+  } catch (error) {
+      console.error('Error:', error.message);
+      res.status(500).json({ error: error.message });
+  }
+});
+
+
+// Retrieve user balance from PayPal
+app.post('/balance', async (req, res) => {
+  try {
+      const { clientId, secretKey } = req.body;
+
+      if (!clientId || !secretKey) {
+          return res.status(400).json({ error: 'Client ID and secret key are required' });
+      }
+
+      // Get PayPal access token
+      const accessToken = await getAccessToken(clientId, secretKey);
+
+      // Get PayPal balance
+      const balance = await getPayPalBalance(accessToken);
+
+      res.status(200).json(balance);
   } catch (error) {
       console.error('Error:', error);
       res.status(500).json({ error: error.message });
   }
 });
+
 
 
 // Run the migration script to create tables if they don't exist
