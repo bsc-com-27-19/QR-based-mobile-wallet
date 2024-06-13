@@ -29,11 +29,6 @@ require('dotenv').config(); // Load environment variables from .env
 const { createTables } = require('./migrate');
 // Configure body parser
 app.use(bodyParser.urlencoded({ extended: true }));
-// Serve static files from the 'front-end' directory
-app.use(express.static(path.join(__dirname, '../front-end')));
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../front-end/html/login.html'));
-});
 
 // Middleware to parse JSON and URL-encoded form data
 app.use(express.json());
