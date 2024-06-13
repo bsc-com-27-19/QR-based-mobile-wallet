@@ -11,7 +11,8 @@ const vonage = new Vonage({
     apiSecret: "HDpUYXWST0xBvQpl"
 });
 const from = "IZEpay";
-const to = "265997189926";
+const to = "265990189926";
+// const to = "265997189926";
 
 // Function to send SMS
 async function sendSMS(text) {
