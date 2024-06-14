@@ -150,6 +150,35 @@ app.post('/login', async (req, res) => {
   }
 });
 
+// Add the profile update endpoint
+app.post('/update-profile', async (req, res) => {
+  try {
+    const { username, email, cardName, cardNumber, cardSecurityCode, cardExpiry } = req.body;
+
+    // Perform validations (e.g., email format)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+
+    // Update the user's information in the database based on the username
+    const result = await pool.query(
+      `UPDATE users SET email = $1, card_name = $2, card_number = $3, card_security_code = $4, card_expiry = $5 WHERE username = $6`,
+      [email, cardName, cardNumber, cardSecurityCode, cardExpiry, username]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.status(200).json({ message: 'Profile updated successfully' });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
 // Protected route
 app.get('/protected', verifyToken, async (req, res) => {
   // If token is valid, send the decoded information
