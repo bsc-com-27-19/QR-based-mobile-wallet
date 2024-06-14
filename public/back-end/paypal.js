@@ -7,14 +7,11 @@ const BASE_URL = 'https://api-m.sandbox.paypal.com'; // Use sandbox environment 
 
 // Initialize Vonage client
 const vonage = new Vonage({
-    apiKey: "897ea9",
-    apiSecret: "HDpUYX0xBvQpl"
-    // apiKey: "87b97ea9",
-    // apiSecret: "HDpUYXWST0xBvQpl"
+    apiKey: "87b97ea9",
+    apiSecret: "HDpUYXWST0xBvQpl"
 });
 const from = "IZEpay";
-const to = "265990189926";
-// const to = "265997189926";
+const to = "265997189926";
 
 // Function to send SMS
 async function sendSMS(text) {
