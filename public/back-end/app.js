@@ -15,6 +15,24 @@ const cors=require("cors")
 const qr = require('qrcode'); // Import the QR code generation library
 const { encode } = require('base64-arraybuffer'); // Import the base64-arraybuffer library
 const { createAndCaptureOrder, getAccessToken, getPayPalBalance, updatePayeeBalance } = require('./paypal'); // Import the new functions
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
+
+const options = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'API Documentation',
+      version: '1.0.0',
+    },
+    servers: [
+      {
+        url: 'http://localhost:3003',
+      },
+    ],
+  },
+  apis: ['./app.js'], // Path to the API docs
+};
 
 // Use CORS middleware
 app.use(cors());
@@ -36,6 +54,82 @@ app.use(express.urlencoded({ extended: true }));
 // Middleware for file uploads
 app.use(fileUpload());
 
+const swaggerSpec = swaggerJsdoc(options);
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+/**
+ * @swagger
+ * components:
+ *   schemas:
+ *     User:
+ *       type: object
+ *       properties:
+ *         id:
+ *           type: integer
+ *         email:
+ *           type: string
+ *         username:
+ *           type: string
+ *         password:
+ *           type: string
+ *         client_id:
+ *           type: string
+ *         secret_key:
+ *           type: string
+ *         card_name:
+ *           type: string
+ *         card_number:
+ *           type: string
+ *         card_security_code:
+ *           type: string
+ *         card_expiry:
+ *           type: string
+ */
+
+/**
+ * @swagger
+ * /register:
+ *   post:
+ *     summary: Register a new user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               username:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               confirm:
+ *                 type: string
+ *               client_id:
+ *                 type: string
+ *               secret_key:
+ *                 type: string
+ *               card:
+ *                 type: object
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   number:
+ *                     type: string
+ *                   security_code:
+ *                     type: string
+ *                   expiry:
+ *                     type: string
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *       400:
+ *         description: Invalid input
+ *       500:
+ *         description: Internal server error
+ */
 //register a user with associated client id and secret key
 app.post('/register', async (req, res) => {
   try {
@@ -98,7 +192,30 @@ function verifyToken(req, res, next) {
     return res.status(401).send('Unauthorized');
   }
 }
-
+/**
+ * @swagger
+ * /login:
+ *   post:
+ *     summary: Login a user
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               username:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *       401:
+ *         description: Incorrect username or password
+ *       500:
+ *         description: Internal server error
+ */
 //Login endpoint
 app.post('/login', async (req, res) => {
   try {
@@ -149,6 +266,40 @@ app.post('/login', async (req, res) => {
       res.status(500).send('Internal Server Error');
   }
 });
+/**
+ * @swagger
+ * /update-profile:
+ *   post:
+ *     summary: Update user profile
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               username:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               cardName:
+ *                 type: string
+ *               cardNumber:
+ *                 type: string
+ *               cardSecurityCode:
+ *                 type: string
+ *               cardExpiry:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *       400:
+ *         description: Invalid input
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
 
 // Add the profile update endpoint
 app.post('/update-profile', async (req, res) => {
@@ -178,12 +329,37 @@ app.post('/update-profile', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /protected:
+ *   get:
+ *     summary: Access protected route
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Successfully accessed protected route
+ *       401:
+ *         description: Unauthorized
+ */
 
 // Protected route
 app.get('/protected', verifyToken, async (req, res) => {
   // If token is valid, send the decoded information
   res.json(req.userId);
 });
+
+/**
+ * @swagger
+ * /qrcode:
+ *   get:
+ *     summary: Generate and display QR code
+ *     responses:
+ *       200:
+ *         description: QR code generated successfully
+ *       500:
+ *         description: Internal server error
+ */
 
 // Define a route to generate and display the QR code
 app.get('/qrcode', (req, res) => {
@@ -207,6 +383,23 @@ app.get('/qrcode', (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /users:
+ *   get:
+ *     summary: Get all registered users
+ *     responses:
+ *       200:
+ *         description: A list of users
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/User'
+ *       500:
+ *         description: Internal server error
+ */
 
 // Get all registered users
 app.get('/users', async (req, res) => {
@@ -227,6 +420,56 @@ app.get('/users', async (req, res) => {
     res.status(500).send('Internal Server Error');
   }
 });
+
+/**
+ * @swagger
+ * /order:
+ *   post:
+ *     summary: Create and capture an order
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               purchase_units:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     amount:
+ *                       type: object
+ *                       properties:
+ *                         value:
+ *                           type: number
+ *               card:
+ *                 type: object
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   number:
+ *                     type: string
+ *                   security_code:
+ *                     type: string
+ *                   expiry:
+ *                     type: string
+ *               clientId:
+ *                 type: string
+ *               secretKey:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Order created and payment captured successfully
+ *       400:
+ *         description: Invalid input or insufficient balance
+ *       401:
+ *         description: User not logged in
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
 
 app.post('/order', async (req, res) => {
   try {
@@ -280,6 +523,56 @@ app.post('/order', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /create-order:
+ *   post:
+ *     summary: Create an order
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               purchase_units:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     amount:
+ *                       type: object
+ *                       properties:
+ *                         value:
+ *                           type: number
+ *               card:
+ *                 type: object
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   number:
+ *                     type: string
+ *                   security_code:
+ *                     type: string
+ *                   expiry:
+ *                     type: string
+ *               clientId:
+ *                 type: string
+ *               secretKey:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Order created and payment captured successfully
+ *       400:
+ *         description: Invalid input or insufficient balance
+ *       401:
+ *         description: User not logged in
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Internal server error
+ */
+
 //Create-order endpoint
 app.post('/create-order', async (req, res) => {
   try {
@@ -316,7 +609,54 @@ app.post('/create-order', async (req, res) => {
       res.status(500).json({ error: error.message });
   }
 });
-
+/**
+ * @swagger
+ * /balance:
+ *   post:
+ *     summary: Retrieve user balance from PayPal
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               clientId:
+ *                 type: string
+ *                 description: The client ID for PayPal API access
+ *               secretKey:
+ *                 type: string
+ *                 description: The secret key for PayPal API access
+ *     responses:
+ *       200:
+ *         description: Successfully retrieved balance
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 balance:
+ *                   type: number
+ *                   description: The user's PayPal balance
+ *       400:
+ *         description: Client ID and secret key are required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ */
 
 // Retrieve user balance from PayPal
 app.post('/balance', async (req, res) => {
@@ -351,3 +691,5 @@ createTables().then(() => {
 }).catch(error => {
   console.error('Error creating tables:', error);
 });
+
+
